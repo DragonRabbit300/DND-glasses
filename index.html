@@ -1,571 +1,427 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-<title>Temporal Autoforge — Glasses HUD</title>
-<style>
-  /* Basic reset */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html,body { height: 100%; font-family: Inter, Roboto, -apple-system, "Segoe UI", Arial; background: rgba(0,0,0,0.02); color: #e9f0ff; }
-  /* HUD background: transparent/overlay */
-  .hud {
-    position: fixed;
-    inset: 0;
-    pointer-events: none; /* let touches fall through unless panels are interactive */
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autocrafter Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-  /* Center crosshair / focus reticle */
-  .reticle {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-    width: 72px; height: 72px;
-    border-radius: 50%;
-    border: 1px solid rgba(230,240,255,0.25);
-    display: flex; align-items: center; justify-content: center;
-    pointer-events: none;
-    mix-blend-mode: screen;
-  }
-  .reticle::after {
-    content: ""; width: 8px; height: 8px; background: rgba(230,240,255,0.7); border-radius: 50%;
-  }
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: #00ff88;
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-  /* Top panel (compact status) */
-  .topbar {
-    position: absolute; left: 50%; transform: translateX(-50%);
-    top: 18px;
-    display: flex; gap: 12px; pointer-events: auto;
-    backdrop-filter: blur(6px) saturate(1.2);
-  }
-  .pill {
-    background: linear-gradient(180deg, rgba(10,14,20,0.65), rgba(16,22,28,0.45));
-    border: 1px solid rgba(255,255,255,0.06);
-    padding: 8px 12px;
-    border-radius: 999px;
-    display: flex; gap: 10px; align-items: center;
-    min-width: 120px;
-  }
-  .pill .label { font-size: 12px; color: rgba(200,220,255,0.8); }
-  .pill .value { font-weight: 700; font-size: 15px; color: #dff3ff; letter-spacing: 0.4px; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
-  /* Left sidebar (telemetry) */
-  .sidebar-left {
-    position: absolute; left: 18px; top: 18px; bottom: 18px;
-    width: 360px; max-width: 38vw; pointer-events: auto;
-    display: flex; flex-direction: column; gap: 12px;
-    padding: 12px;
-    border-radius: 14px;
-    background: linear-gradient(180deg, rgba(4,6,10,0.35), rgba(6,8,12,0.18));
-    border: 1px solid rgba(255,255,255,0.04);
-    backdrop-filter: blur(6px);
-  }
+        header {
+            text-align: center;
+            padding: 20px;
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            margin-bottom: 30px;
+            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
+        }
 
-  .card {
-    background: linear-gradient(180deg, rgba(8,10,14,0.32), rgba(10,14,18,0.18));
-    border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 8px;
-    border: 1px solid rgba(255,255,255,0.03);
-    min-height: 48px;
-  }
+        h1 {
+            font-size: 2.5em;
+            text-shadow: 0 0 10px #00ff88;
+            margin-bottom: 10px;
+        }
 
-  .card h3 { font-size: 13px; color: #cde9ff; }
-  .card .meter { display:flex; align-items:center; gap:8px; }
-  .bar {
-    height: 10px; background: rgba(255,255,255,0.06); border-radius: 999px; flex: 1; overflow: hidden;
-  }
-  .bar > i { display: block; height: 100%; width: 0%; background: linear-gradient(90deg,#66e0ff,#9ff0ff); border-radius: inherit; transition: width 300ms ease; }
+        .status {
+            color: #ffaa00;
+            font-size: 0.9em;
+        }
 
-  .controls {
-    display:flex; gap:8px; flex-wrap:wrap;
-  }
-  .btn {
-    background: rgba(255,255,255,0.03);
-    border: 1px solid rgba(255,255,255,0.04);
-    color: #e9f0ff; padding: 8px 10px; font-weight:600; font-size:13px;
-    border-radius: 10px; cursor: pointer;
-  }
-  .btn.warn { background: linear-gradient(90deg,#ffb27a,#ff876b); color: #111; border: none; }
-  .btn.ghost { background: transparent; border: 1px dashed rgba(255,255,255,0.06); }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
 
-  /* Right-side slim panel for recipe & quick actions */
-  .sidebar-right {
-    position: absolute; right: 18px; top: 18px; width: 320px; pointer-events: auto;
-    max-width: 34vw; padding: 12px; border-radius: 12px;
-    background: linear-gradient(180deg, rgba(10,12,16,0.28), rgba(9,11,15,0.12));
-    border: 1px solid rgba(255,255,255,0.03);
-  }
-  .recipe-list { display:flex; flex-direction:column; gap:8px; max-height: 46vh; overflow:auto; padding-right:6px; }
-  .recipe { padding:8px; border-radius:8px; background: rgba(255,255,255,0.02); cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
-  .recipe.active { outline: 2px solid rgba(100,220,255,0.14); background: linear-gradient(90deg, rgba(10,18,24,0.45), rgba(8,12,16,0.3)); }
+        .panel {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.2);
+        }
 
-  /* Status badges */
-  .status-green { color:#67f3b1; }
-  .status-amber { color:#ffd47a; }
-  .status-red { color:#ff8a8a; }
+        .panel h2 {
+            color: #00ff88;
+            margin-bottom: 15px;
+            text-shadow: 0 0 5px #00ff88;
+            font-size: 1.5em;
+        }
 
-  /* Bottom log */
-  .log {
-    position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px; width: min(90%, 1100px);
-    padding: 10px; border-radius:12px; pointer-events: auto;
-    background: linear-gradient(180deg, rgba(6,8,12,0.32), rgba(8,10,14,0.18));
-    border: 1px solid rgba(255,255,255,0.03); max-height: 22vh; overflow:auto;
-  }
-  .log .line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: rgba(220,235,255,0.8); font-size:12px; opacity:0.95; padding:2px 0; }
+        .material-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
 
-  /* Small responsive tweaks */
-  @media (max-width: 900px) {
-    .sidebar-left { width: 46vw; }
-    .sidebar-right { display:none; }
-    .topbar { left: 12px; transform: none; }
-    .reticle { width: 56px; height: 56px; }
-  }
+        input[type="text"], input[type="number"] {
+            flex: 1;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: inherit;
+        }
 
-  /* Tiny tooltip */
-  .kbd { background: rgba(255,255,255,0.03); padding:2px 6px; border-radius:6px; font-weight:700; font-size:12px; }
-</style>
+        input[type="text"]::placeholder {
+            color: #00ff8866;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            border: none;
+            color: #000;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #00cc6a, #00ff88);
+            box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            background: #555;
+            color: #888;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .material-list {
+            list-style: none;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .material-item {
+            background: rgba(0, 255, 136, 0.1);
+            padding: 10px;
+            margin-bottom: 8px;
+            border-radius: 5px;
+            border-left: 3px solid #00ff88;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .remove-btn {
+            background: #ff4444;
+            padding: 5px 10px;
+            font-size: 0.8em;
+        }
+
+        .remove-btn:hover {
+            background: #ff6666;
+        }
+
+        .recommendations {
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #00ff88;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            min-height: 200px;
+        }
+
+        .loading {
+            text-align: center;
+            color: #ffaa00;
+            padding: 40px;
+            font-size: 1.2em;
+        }
+
+        .recipe-card {
+            background: rgba(0, 255, 136, 0.1);
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .recipe-card h3 {
+            color: #ffaa00;
+            margin-bottom: 10px;
+            text-shadow: 0 0 5px #ffaa00;
+        }
+
+        .recipe-details {
+            margin: 10px 0;
+            line-height: 1.6;
+        }
+
+        .crafting-time {
+            color: #00ccff;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .substitutions {
+            color: #ffaa00;
+            font-style: italic;
+            margin-top: 10px;
+        }
+
+        .analyze-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            margin-top: 10px;
+        }
+
+        .error {
+            color: #ff4444;
+            padding: 15px;
+            border: 1px solid #ff4444;
+            border-radius: 5px;
+            margin: 10px 0;
+            background: rgba(255, 68, 68, 0.1);
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #00ff88;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
+    <div class="container">
+        <header>
+            <h1>⚒️ AUTOCRAFTER INTERFACE ⚒️</h1>
+            <div class="status">🟢 GLASSES CONNECTED | BACKPACK ONLINE</div>
+        </header>
 
-<div class="hud" role="application" aria-label="Temporal Autoforge HUD">
-  <!-- Reticle -->
-  <div class="reticle" aria-hidden="true"></div>
+        <div class="grid">
+            <div class="panel">
+                <h2>📦 Material Inventory</h2>
+                <div class="material-input">
+                    <input type="text" id="materialName" placeholder="Material name (e.g., Iron Ingot)">
+                    <input type="number" id="materialQty" placeholder="Qty" min="1" value="1">
+                    <button onclick="addMaterial()">Add</button>
+                </div>
+                <ul class="material-list" id="materialList"></ul>
+            </div>
 
-  <!-- Top status pills -->
-  <div class="topbar" role="status" aria-live="polite">
-    <div class="pill" id="conn-pill" title="Connection status">
-      <div class="label">LINK</div>
-      <div class="value" id="conn-value">DISCONNECTED</div>
-    </div>
-
-    <div class="pill" title="Power reserve">
-      <div class="label">POWER</div>
-      <div class="value" id="power-value">—</div>
-    </div>
-
-    <div class="pill" title="Active recipe">
-      <div class="label">RECIPE</div>
-      <div class="value" id="recipe-value">—</div>
-    </div>
-  </div>
-
-  <!-- Left telemetry -->
-  <aside class="sidebar-left" aria-label="Telemetry">
-    <div class="card" aria-live="polite">
-      <h3>Conveyor</h3>
-      <div class="meter">
-        <div class="bar" aria-hidden="true"><i id="conveyor-bar"></i></div>
-        <div style="min-width:70px;text-align:right;font-weight:700;" id="conveyor-speed">—</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:6px">
-        <div><small class="label">Load:</small> <strong id="conveyor-load">—</strong></div>
-        <div><small class="label">Status:</small> <strong id="conveyor-status">Idle</strong></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h3>Arms</h3>
-      <div style="display:flex;gap:10px;">
-        <div style="flex:1">
-          <div style="font-size:13px;color:#cfeeff">Arm 1</div>
-          <div class="bar" style="margin-top:6px"><i id="arm1-bar"></i></div>
-          <div style="font-size:12px;margin-top:6px">Tool: <span id="arm1-tool">—</span></div>
+            <div class="panel">
+                <h2>🎯 Quick Actions</h2>
+                <button class="analyze-btn" onclick="analyzeMaterials()" id="analyzeBtn">
+                    🔮 Analyze & Get Recommendations
+                </button>
+                <button class="analyze-btn" onclick="clearInventory()" style="background: linear-gradient(135deg, #ff4444, #cc0000); margin-top: 10px;">
+                    🗑️ Clear Inventory
+                </button>
+            </div>
         </div>
-        <div style="flex:1">
-          <div style="font-size:13px;color:#cfeeff">Arm 2</div>
-          <div class="bar" style="margin-top:6px"><i id="arm2-bar"></i></div>
-          <div style="font-size:12px;margin-top:6px">Tool: <span id="arm2-tool">—</span></div>
+
+        <div class="recommendations">
+            <h2>🧙 AI Crafting Recommendations</h2>
+            <div id="recommendationsContent">
+                <p style="color: #ffaa00; text-align: center; padding: 40px;">
+                    Add materials to your inventory and click "Analyze & Get Recommendations" to see what you can craft!
+                </p>
+            </div>
         </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px" class="controls">
-        <button class="btn ghost" id="pause-arms">Pause</button>
-        <button class="btn" id="home-arms">Home</button>
-        <button class="btn warn" id="override-eject">EJECT</button>
-      </div>
     </div>
 
-    <div class="card">
-      <h3>Forge</h3>
-      <div class="meter">
-        <div class="bar"><i id="forge-bar"></i></div>
-        <div style="min-width:70px;text-align:right;font-weight:700;" id="forge-temp">—</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-top:6px">
-        <div>Heat: <strong id="forge-heat">—</strong></div>
-        <div>State: <strong id="forge-status">Idle</strong></div>
-      </div>
-    </div>
+    <script>
+        let inventory = [];
 
-    <div class="card">
-      <h3>Stabilizer</h3>
-      <div style="display:flex;align-items:center;gap:8px">
-        <div style="width:64px;height:64px;border-radius:8px;background:linear-gradient(180deg,#0a1f2a,#05313f);display:flex;align-items:center;justify-content:center">
-          <div id="stab-ind" style="font-size:12px;color:#bff1ff">OK</div>
-        </div>
-        <div style="flex:1">
-          <div>Lock: <strong id="stab-lock">Locked</strong></div>
-          <div style="font-size:12px;margin-top:6px;color:rgba(200,220,255,0.7)">Precision drift: <span id="stab-drift">0.0</span> mm</div>
-        </div>
-      </div>
-      <div style="margin-top:8px" class="controls">
-        <button class="btn" id="stab-toggle">Toggle Lock</button>
-        <button class="btn ghost" id="stab-calib">Calibrate</button>
-      </div>
-    </div>
+        function addMaterial() {
+            const nameInput = document.getElementById('materialName');
+            const qtyInput = document.getElementById('materialQty');
+            
+            const name = nameInput.value.trim();
+            const qty = parseInt(qtyInput.value);
 
-    <div class="card" id="rune-card">
-      <h3>Runes</h3>
-      <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <!-- These will be updated by JS -->
-        <span class="kbd status-amber" id="rune-ash">ASH: —</span>
-        <span class="kbd status-amber" id="rune-cahl">CAHL: —</span>
-        <span class="kbd status-amber" id="rune-jael">JAEL: —</span>
-        <span class="kbd status-amber" id="rune-bryn">BRYN: —</span>
-      </div>
-    </div>
-  </aside>
+            if (!name) {
+                alert('Please enter a material name');
+                return;
+            }
 
-  <!-- Right-side recipe & actions -->
-  <aside class="sidebar-right" aria-label="Recipes & Controls">
-    <div class="card" style="margin-bottom:8px;">
-      <h3>Recipe Control</h3>
-      <div style="display:flex;gap:8px;margin-top:6px">
-        <button class="btn" id="start-btn">Start</button>
-        <button class="btn ghost" id="pause-btn">Pause</button>
-        <button class="btn warn" id="stop-btn">Stop</button>
-      </div>
-      <div style="margin-top:8px;font-size:12px;color:rgba(200,220,255,0.8)">
-        Quick burst: <button class="btn" id="burst-btn">Extra Turn</button> <small style="opacity:0.8">(use carefully)</small>
-      </div>
-    </div>
+            const existing = inventory.find(m => m.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                existing.quantity += qty;
+            } else {
+                inventory.push({ name, quantity: qty });
+            }
 
-    <div class="card" style="padding-bottom:6px;">
-      <h3>Recipes</h3>
-      <div class="recipe-list" id="recipe-list" role="list" aria-label="Saved recipes">
-        <!-- JS populates -->
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px" class="controls">
-        <button class="btn" id="new-recipe">New</button>
-        <button class="btn ghost" id="upload-recipe">Upload</button>
-      </div>
-    </div>
+            nameInput.value = '';
+            qtyInput.value = '1';
+            updateMaterialList();
+        }
 
-    <div class="card" style="margin-top:8px;">
-      <h3>Quick Actions</h3>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn" id="manual-override">Manual Override</button>
-        <button class="btn ghost" id="sync-glasses">Sync Glasses</button>
-        <button class="btn warn" id="panic-eject">Emergency Containment</button>
-      </div>
-    </div>
-  </aside>
+        function removeMaterial(index) {
+            inventory.splice(index, 1);
+            updateMaterialList();
+        }
 
-  <!-- Bottom log -->
-  <div class="log" id="log" aria-live="polite" role="log" aria-label="System log"></div>
-</div>
+        function updateMaterialList() {
+            const list = document.getElementById('materialList');
+            list.innerHTML = '';
 
-<script>
-/* ============================
-   Glasses HUD JavaScript
-   - Replace WS_URL with your backpack's WebSocket endpoint
-   - Protocol (incoming JSON messages from device):
-     { type: "telemetry", conveyor:{speed:0..100, load_lb: number, status: "idle|run|jam"}, arms: [{id:1, load_pct, tool, state}], forge:{temp_c, state}, stabilizer:{locked:boolean, drift_mm:number}, power_pct:number, runes:{ASH:"minor|greater|supreme|ok|err", ...} }
-   - Outgoing commands -> JSON:
-     { cmd: "start_recipe", id: "recipe-1" }
-     { cmd: "pause" }
-     { cmd: "manual", action: "eject" }
-     { cmd: "calibrate_stabilizer" }
-   ============================ */
+            inventory.forEach((material, index) => {
+                const li = document.createElement('li');
+                li.className = 'material-item';
+                li.innerHTML = `
+                    <span>${material.name} (x${material.quantity})</span>
+                    <button class="remove-btn" onclick="removeMaterial(${index})">Remove</button>
+                `;
+                list.appendChild(li);
+            });
+        }
 
-const WS_URL = "wss://YOUR_BACKPACK_WS_ENDPOINT"; // <-- set this to your device
-let socket = null;
-let simulate = true; // set to false to use real WebSocket
-let simTimer = null;
+        function clearInventory() {
+            if (confirm('Clear all materials from inventory?')) {
+                inventory = [];
+                updateMaterialList();
+                document.getElementById('recommendationsContent').innerHTML = `
+                    <p style="color: #ffaa00; text-align: center; padding: 40px;">
+                        Inventory cleared. Add materials to get crafting recommendations!
+                    </p>
+                `;
+            }
+        }
 
-const logEl = document.getElementById('log');
-const connValue = document.getElementById('conn-value');
-const powerValue = document.getElementById('power-value');
-const recipeValue = document.getElementById('recipe-value');
+        async function analyzeMaterials() {
+            if (inventory.length === 0) {
+                alert('Please add materials to your inventory first!');
+                return;
+            }
 
-// Telemetry DOM refs
-const conveyorBar = document.getElementById('conveyor-bar');
-const conveyorSpeed = document.getElementById('conveyor-speed');
-const conveyorLoad = document.getElementById('conveyor-load');
-const conveyorStatus = document.getElementById('conveyor-status');
+            const btn = document.getElementById('analyzeBtn');
+            const content = document.getElementById('recommendationsContent');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Analyzing...';
+            content.innerHTML = '<div class="loading">🔮 Consulting the AI Crafter...</div>';
 
-const arm1Bar = document.getElementById('arm1-bar');
-const arm2Bar = document.getElementById('arm2-bar');
-const arm1Tool = document.getElementById('arm1-tool');
-const arm2Tool = document.getElementById('arm2-tool');
+            try {
+                const materialList = inventory.map(m => `${m.name} (x${m.quantity})`).join(', ');
+                
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'claude-sonnet-4-20250514',
+                        max_tokens: 1000,
+                        messages: [{
+                            role: 'user',
+                            content: `You are a D&D crafting expert analyzing materials in an adventurer's autocrafter backpack. 
 
-const forgeBar = document.getElementById('forge-bar');
-const forgeTemp = document.getElementById('forge-temp');
-const forgeStatus = document.getElementById('forge-status');
+Current inventory: ${materialList}
 
-const stabInd = document.getElementById('stab-ind');
-const stabLock = document.getElementById('stab-lock');
-const stabDrift = document.getElementById('stab-drift');
+Please provide:
+1. 3-5 items that can be crafted with these EXACT materials (no additional materials needed)
+2. For each item, list the materials needed and crafting time in D&D time units (rounds, minutes, hours, days)
+3. Suggest possible substitutions if applicable
+4. Be creative but stay within D&D 5e crafting rules
 
-const runeAsh = document.getElementById('rune-ash');
-const runeCahl = document.getElementById('rune-cahl');
-const runeJael = document.getElementById('rune-jael');
-const runeBryn = document.getElementById('rune-bryn');
+Format your response as clear, separate items with:
+- Item name
+- Materials required
+- Crafting time
+- Any possible substitutions`
+                        }]
+                    })
+                });
 
-const recipeListEl = document.getElementById('recipe-list');
+                const data = await response.json();
+                
+                if (data.content && data.content[0]) {
+                    const recommendations = data.content[0].text;
+                    displayRecommendations(recommendations);
+                } else {
+                    throw new Error('No recommendations received');
+                }
 
-function log(msg, level = "info") {
-  const line = document.createElement('div');
-  line.className = 'line';
-  const ts = new Date().toLocaleTimeString();
-  line.textContent = `[${ts}] ${msg}`;
-  logEl.prepend(line);
-  // clamp lines
-  while (logEl.children.length > 300) logEl.removeChild(logEl.lastChild);
-}
+            } catch (error) {
+                content.innerHTML = `
+                    <div class="error">
+                        ⚠️ Error connecting to AI Crafter: ${error.message}
+                        <br><br>
+                        Please check your connection and try again.
+                    </div>
+                `;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔮 Analyze & Get Recommendations';
+            }
+        }
 
-/* ---------- WebSocket connection ---------- */
-function connectSocket() {
-  if (simulate) {
-    connValue.textContent = "SIMULATED";
-    connValue.style.color = "#ffd47a";
-    log("Running in SIMULATION mode. Toggle simulate=false to connect real device.");
-    startSimulation();
-    return;
-  }
+        function displayRecommendations(text) {
+            const content = document.getElementById('recommendationsContent');
+            
+            const sections = text.split(/\n\n+/);
+            let html = '';
 
-  socket = new WebSocket(WS_URL);
-  socket.addEventListener('open', () => {
-    connValue.textContent = "CONNECTED";
-    connValue.style.color = "#67f3b1";
-    log("Connected to device.");
-  });
-  socket.addEventListener('message', ev => {
-    try {
-      const data = JSON.parse(ev.data);
-      handleTelemetry(data);
-    } catch(e) {
-      log("Malformed message: " + e.message);
-    }
-  });
-  socket.addEventListener('close', () => {
-    connValue.textContent = "DISCONNECTED";
-    connValue.style.color = "#ff8a8a";
-    log("Socket closed.");
-    // attempt reconnect after a delay
-    setTimeout(connectSocket, 3000);
-  });
-  socket.addEventListener('error', err => {
-    connValue.textContent = "ERROR";
-    connValue.style.color = "#ff8a8a";
-    log("Socket error: " + (err.message || "[see console]"));
-    console.error(err);
-  });
-}
+            sections.forEach(section => {
+                if (section.trim()) {
+                    html += `<div class="recipe-card">
+                        <div class="recipe-details">${section.replace(/\n/g, '<br>')}</div>
+                    </div>`;
+                }
+            });
 
-/* ---------- Telemetry handler ---------- */
-function handleTelemetry(payload) {
-  if (payload.type === "telemetry") {
-    updateConveyor(payload.conveyor || {});
-    updateArms(payload.arms || []);
-    updateForge(payload.forge || {});
-    updateStabilizer(payload.stabilizer || {});
-    updatePower(payload.power_pct);
-    updateRunes(payload.runes || {});
-    updateRecipe(payload.recipe || null);
-  } else if (payload.type === "log") {
-    log(payload.msg || "[device] log");
-  } else {
-    log("Unknown payload type: " + payload.type);
-  }
-}
+            content.innerHTML = html || '<p style="color: #ffaa00;">No recipes found. Try adding more materials!</p>';
+        }
 
-function updateConveyor(c) {
-  const speed = Math.round((c.speed || 0));
-  conveyorBar.style.width = Math.max(0, Math.min(100, speed)) + "%";
-  conveyorSpeed.textContent = speed + "%";
-  conveyorLoad.textContent = (c.load_lb !== undefined ? (c.load_lb + " lb") : "—");
-  conveyorStatus.textContent = (c.status || "—");
-}
+        document.getElementById('materialName').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addMaterial();
+        });
 
-function updateArms(arr) {
-  // expect arr[0..] with load_pct and tool
-  if (arr[0]) {
-    const p = Math.round(arr[0].load_pct || 0);
-    arm1Bar.style.width = Math.min(100, Math.max(0, p)) + "%";
-    arm1Tool.textContent = arr[0].tool || "—";
-  }
-  if (arr[1]) {
-    const p = Math.round(arr[1].load_pct || 0);
-    arm2Bar.style.width = Math.min(100, Math.max(0, p)) + "%";
-    arm2Tool.textContent = arr[1].tool || "—";
-  }
-}
-
-function updateForge(f) {
-  const pct = Math.min(100, Math.max(0, (f.temp_c || 20) / 10)); // simple mapping
-  forgeBar.style.width = pct + "%";
-  forgeTemp.textContent = (f.temp_c !== undefined ? Math.round(f.temp_c) + "°C" : "—");
-  forgeStatus.textContent = (f.state || "—");
-}
-
-function updateStabilizer(s) {
-  stabInd.textContent = (s.locked ? "LOCKED" : "OPEN");
-  stabLock.textContent = (s.locked ? "Locked" : "Open");
-  stabDrift.textContent = (s.drift_mm !== undefined ? Number(s.drift_mm).toFixed(2) : "0.00");
-  if (!s.locked) {
-    stabInd.style.color = "#ffd47a";
-  } else {
-    stabInd.style.color = "#67f3b1";
-  }
-}
-
-function updatePower(pct) {
-  powerValue.textContent = (pct !== undefined ? Math.round(pct) + "%" : "—");
-  if (pct >= 60) powerValue.style.color = "#67f3b1";
-  else if (pct >= 30) powerValue.style.color = "#ffd47a";
-  else powerValue.style.color = "#ff8a8a";
-}
-
-function updateRunes(r) {
-  runeAsh.textContent = "ASH: " + (r.ASH || "—");
-  runeCahl.textContent = "CAHL: " + (r.CAHL || "—");
-  runeJael.textContent = "JAEL: " + (r.JAEL || "—");
-  runeBryn.textContent = "BRYN: " + (r.BRYN || "—");
-  // color them
-  [runeAsh, runeCahl, runeJael, runeBryn].forEach(el => {
-    const txt = el.textContent.toLowerCase();
-    if (txt.includes("supreme") || txt.includes("ok")) el.classList.remove('status-amber','status-red'), el.classList.add('status-green');
-    else if (txt.includes("greater") || txt.includes("minor")) el.classList.remove('status-green','status-red'), el.classList.add('status-amber');
-    else el.classList.remove('status-green','status-amber'), el.classList.add('status-red');
-  });
-}
-
-function updateRecipe(r) {
-  if (!r) {
-    recipeValue.textContent = "—";
-    return;
-  }
-  recipeValue.textContent = (r.name || r.id || "—");
-}
-
-/* ---------- UI Actions & Event Wiring ---------- */
-document.getElementById('start-btn').addEventListener('click', ()=> sendCommand({cmd:'start'}));
-document.getElementById('pause-btn').addEventListener('click', ()=> sendCommand({cmd:'pause'}));
-document.getElementById('stop-btn').addEventListener('click', ()=> sendCommand({cmd:'stop'}));
-document.getElementById('burst-btn').addEventListener('click', ()=> sendCommand({cmd:'burst'}));
-document.getElementById('override-eject').addEventListener('click', ()=> sendCommand({cmd:'manual',action:'eject'}));
-document.getElementById('stab-toggle').addEventListener('click', ()=> sendCommand({cmd:'toggle_stabilizer'}));
-document.getElementById('stab-calib').addEventListener('click', ()=> sendCommand({cmd:'calibrate_stabilizer'}));
-document.getElementById('panic-eject').addEventListener('click', ()=> sendCommand({cmd:'panic_eject'}));
-document.getElementById('sync-glasses').addEventListener('click', ()=> sendCommand({cmd:'resync'}));
-document.getElementById('manual-override').addEventListener('click', ()=> sendCommand({cmd:'manual',action:'override'}));
-document.getElementById('home-arms').addEventListener('click', ()=> sendCommand({cmd:'home_arms'}));
-document.getElementById('pause-arms').addEventListener('click', ()=> sendCommand({cmd:'pause_arms'}));
-
-// recipe UI helpers
-const sampleRecipes = [
-  {id:'rune-ring-basic', name:'Basic Rune Ring', steps:6, est_min:8},
-  {id:'blade-edge', name:'Edge Blade + DURN', steps:10, est_min:14},
-  {id:'amulet-ashbind', name:'Ashbound Amulet', steps:12, est_min:18}
-];
-
-function renderRecipes() {
-  recipeListEl.innerHTML = "";
-  sampleRecipes.forEach(r => {
-    const el = document.createElement('div');
-    el.className = 'recipe';
-    el.tabIndex = 0;
-    el.innerHTML = `<div style="display:flex;flex-direction:column"><strong>${r.name}</strong><small style="opacity:0.75">${r.steps} steps • est ${r.est_min}m</small></div><div style="display:flex;flex-direction:column;align-items:flex-end"><button class="btn" onclick="sendCommand({cmd:'select_recipe', id:'${r.id}'})">Select</button></div>`;
-    recipeListEl.appendChild(el);
-  });
-}
-renderRecipes();
-
-function sendCommand(obj) {
-  const json = JSON.stringify(obj);
-  log("OUT → " + json);
-  if (simulate) {
-    // simulate local reaction
-    handleLocalCommandSimulation(obj);
-  } else {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      log("Cannot send: socket not open");
-      return;
-    }
-    socket.send(json);
-  }
-}
-
-/* =======================
-   Simple Simulation Mode
-   ======================= */
-function startSimulation() {
-  // seed
-  const state = {
-    conveyor: { speed: 0, load_lb: 12, status: "idle" },
-    arms: [
-      { id:1, load_pct: 5, tool: "grip" },
-      { id:2, load_pct: 10, tool: "engraver" }
-    ],
-    forge: { temp_c: 25, state: "idle" },
-    stabilizer: { locked:true, drift_mm: 0.02 },
-    power_pct: 92,
-    runes: { ASH: "Supreme", CAHL: "Greater", JAEL: "Minor", BRYN: "Ok" },
-    recipe: null
-  };
-  // show initial
-  handleTelemetry({ type: "telemetry", ...state });
-
-  let t = 0;
-  simTimer = setInterval(()=> {
-    t++;
-    // fluctuate
-    state.conveyor.speed = Math.round((Math.sin(t/6)+1)/2 * 70);
-    state.conveyor.status = state.conveyor.speed > 10 ? "running" : "idle";
-    state.conveyor.load_lb = 12 + Math.round(Math.abs(Math.sin(t/4))*18);
-    state.arms[0].load_pct = Math.round(Math.abs(Math.cos(t/3)) * 40);
-    state.arms[1].load_pct = Math.round(Math.abs(Math.sin(t/2)) * 60);
-    state.forge.temp_c = 200 + Math.round(Math.abs(Math.sin(t/2))*600); // just simulated
-    state.forge.state = state.forge.temp_c > 250 ? "active" : "warm";
-    state.power_pct = Math.max(10, 92 - Math.round(t/120));
-    state.stabilizer.drift_mm = Math.abs(Math.sin(t/11))*0.12;
-    handleTelemetry({ type: "telemetry", ...state });
-    if (t % 50 === 0) log("Sim heartbeat");
-  }, 700);
-}
-
-function handleLocalCommandSimulation(cmd) {
-  if (cmd.cmd === 'start') {
-    log("Starting recipe (sim).");
-    recipeValue.textContent = "Sim Recipe";
-    // quick transient effect
-    forgeTemp.textContent = "350°C";
-    setTimeout(()=> forgeTemp.textContent = "—", 3000);
-  } else if (cmd.cmd === 'burst') {
-    log("Activating temporal burst! Extra step performed.");
-    // visual flash
-    const old = forgeBar.style.width;
-    forgeBar.style.width = "100%";
-    setTimeout(()=> forgeBar.style.width = old, 350);
-  } else if (cmd.cmd === 'manual' && cmd.action === 'eject') {
-    log("Manual eject executed (sim). Contents moved to containment.");
-  } else {
-    log("Simulated command: " + JSON.stringify(cmd));
-  }
-}
-
-/* ---------- keyboard shortcuts ---------- */
-window.addEventListener('keydown', (e) => {
-  // H = home arms, S = start, P = pause, B = burst, E = eject
-  if (e.key.toLowerCase() === 'h') sendCommand({cmd:'home_arms'});
-  if (e.key.toLowerCase() === 's') sendCommand({cmd:'start'});
-  if (e.key.toLowerCase() === 'p') sendCommand({cmd:'pause'});
-  if (e.key.toLowerCase() === 'b') sendCommand({cmd:'burst'});
-  if (e.key.toLowerCase() === 'e') sendCommand({cmd:'manual',action:'eject'});
-});
-
-/* ---------- init ---------- */
-connectSocket();
-log("HUD loaded. Shortcuts: H=home · S=start · P=pause · B=burst · E=eject");
-</script>
+        document.getElementById('materialQty').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addMaterial();
+        });
+    </script>
 </body>
 </html>
